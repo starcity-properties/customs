@@ -1,6 +1,6 @@
 (ns customs.role
-  (:require [clojure.spec :as s]
-            [toolbelt.predicates :as p]))
+  (:require [clojure.spec.alpha :as s]
+            [toolbelt.datomic :as td]))
 
 (s/def ::role
   #{:account.role/admin
@@ -31,7 +31,7 @@
   (= role (:account/role account)))
 
 (s/fdef is-role
-        :args (s/cat :role ::role :account p/entity?)
+        :args (s/cat :role ::role :account td/entity?)
         :ret boolean?)
 
 (def applicant? (partial is-role applicant))

@@ -1,11 +1,10 @@
 (ns customs.auth
-  (:require [buddy.core
-             [codecs :refer [bytes->hex]]
-             [hash :refer [md5]]]
+  (:require [buddy.core.codecs :refer [bytes->hex]]
+            [buddy.core.hash :refer [md5]]
             [buddy.hashers :as hashers]
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             [datomic.api :as d]
-            [toolbelt.predicates :as p]))
+            [toolbelt.datomic :as td]))
 
 (defn hash-password
   "Generate a hash for `password`."
@@ -47,7 +46,7 @@
   {:db/id (:db/id account) :account/password (hash-password new-password)})
 
 (s/fdef change-password
-        :args (s/cat :account p/entity?
+        :args (s/cat :account td/entity?
                      :new-password string?)
         :ret map?)
 
@@ -59,7 +58,7 @@
     [new-password (change-password account new-password)]))
 
 (s/fdef reset-password
-        :args (s/cat :account p/entity?)
+        :args (s/cat :account td/entity?)
         :ret (s/cat :new-password string? :tx-data map?))
 
 (defn is-password?
@@ -69,7 +68,7 @@
     (matching-password? password hash)))
 
 (s/fdef is-password?
-        :args (s/cat :account p/entity?
+        :args (s/cat :account td/entity?
                      :password string?)
         :ret boolean?)
 
@@ -82,7 +81,7 @@
      (session-data account))))
 
 (s/fdef authenticate
-        :args (s/cat :db p/db? :email string? :password string?)
+        :args (s/cat :db td/db? :email string? :password string?)
         :ret (s/or :nothing nil? :data map?))
 
 (defn make-activation-hash
@@ -101,5 +100,5 @@
    :account/activated true})
 
 (s/fdef activate
-        :args (s/cat :account p/entity?)
+        :args (s/cat :account td/entity?)
         :ret map?)

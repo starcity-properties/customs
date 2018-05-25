@@ -14,7 +14,9 @@
 ;; =============================================================================
 
 (defn- get-role [req]
-  (get-in req [:session :identity :account/role]))
+  (let [identity (or (:identity req)
+                     (get-in req [:session :identity]))]
+    (:account/role identity)))
 
 (defn authenticated-user [req]
   (if (authenticated? req)

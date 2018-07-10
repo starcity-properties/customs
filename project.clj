@@ -5,7 +5,9 @@
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [com.datomic/datomic-free "0.9.5544"]
                  [buddy "1.3.0"]
-                 [starcity/toolbelt-datomic "0.1.0"]]
+                 [starcity/toolbelt-datomic "0.1.0"]
+
+                 [clj-time "0.14.4"]]
 
   :repositories {"releases" {:url        "s3://starjars/releases"
                              :username   :env/aws_access_key

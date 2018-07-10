@@ -1,7 +1,9 @@
 (ns customs.access
-  (:require [buddy.auth :refer [authenticated? throw-unauthorized]]
+  (:require [buddy.auth :as buddy.auth :refer [authenticated? throw-unauthorized]]
             [buddy.auth.accessrules :refer [error success]]
-            [buddy.auth.backends.session :refer [session-backend]]))
+            [buddy.auth.backends.session :refer [session-backend]]
+            [buddy.auth.backends :as backends]
+            [buddy.auth.protocols :as protocols]))
 
 ;; =============================================================================
 ;; Constants
@@ -76,11 +78,45 @@
    :body    body
    :headers {"Content-Type" "text/html; charset=utf-8"}})
 
+(defn- default-unauthorized [{:keys [headers] :as request} metadata]
+  (if (authenticated? request)
+    (response "You are not authorized to view this page." 403)
+    (response "You are not authenticated; please log in." 401)))
+
 (defn auth-backend
   "Authentication/authorization backend for ring middlewares."
   [& {:keys [unauthorized-handler]}]
-  (letfn [(-default-handler [{:keys [headers] :as request} metadata]
-            (if (authenticated? request)
-              (response "You are not authorized to view this page." 403)
-              (response "You are not authenticated; please log in." 401)))]
-    (session-backend {:unauthorized-handler (or unauthorized-handler -default-handler)})))
+  (session-backend {:unauthorized-handler (or unauthorized-handler default-unauthorized)}))
+
+(defn auth-backend-jws
+  "Authentication/authorization backend that uses signed self contained tokens (signed JWT)
+  to authenticate.
+
+  Will accept a valid JWT token in a cookie, or the Authorization header. Returns a map
+  representing an account entity in the Starcity system with selected keys;
+  #{:db/id :account/email :account/role}
+
+  See more about signed JWT on https://funcool.github.io/buddy-auth/latest/#signed-jwt"
+  [& {:keys [unauthorized-handler cookie-name] :as opts
+      :or   {unauthorized-handler default-unauthorized} }]
+  (let [default-backend (backends/jws (merge opts
+                                             {:unauthorized-handler unauthorized-handler}))]
+    (reify
+
+      protocols/IAuthentication
+      (-parse [_ request]
+        (letfn [(-parse-cookie [{:keys [cookies]}]
+                  (get-in cookies [cookie-name :value]))]
+          (or (-parse-cookie request)
+              (protocols/-parse default-backend request))))
+      (-authenticate [_ request data]
+        (when-some [auth-data (protocols/-authenticate default-backend request data)]
+          ;; The JWT has been validated, so we'll transform the standard JWT fields to a map
+          ;; representing an account entity in our system
+          {:db/id         (:sub auth-data)
+           ;; Keywords become strings when signed, so make it a keyword again.
+           :account/role  (keyword (:role auth-data))}))
+
+      protocols/IAuthorization
+      (-handle-unauthorized [_ request metadata]
+        (protocols/-handle-unauthorized default-backend request metadata)))))

@@ -66,3 +66,15 @@
                     (:account/role account)
                     opts)
             secret))
+
+(defn unsign
+  "Produce a signed JWT given an account, secret and options.
+
+  Options:
+  :iss      - URI of the issuer. Required.
+  :aud      - Collection of URIs of the recipients of the token. Required.
+  :max-age  - Interval in seconds the token is valid from when it's issued.
+              Optional (default 60 secs)."
+  [data secret opts]
+  (-> (jwt/unsign data secret opts)
+      (update :role keyword)))

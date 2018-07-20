@@ -105,9 +105,42 @@
 
       protocols/IAuthentication
       (-parse [_ request]
-        (letfn [(-parse-cookie [{:keys [cookies]}]
+        (letfn [(-parse-cookie [{:keys [cookies oauth2/access-tokens]}]
                   (get-in cookies [cookie-name :value]))]
           (or (-parse-cookie request)
+              (protocols/-parse default-backend request))))
+      (-authenticate [_ request data]
+        (when-some [auth-data (protocols/-authenticate default-backend request data)]
+          ;; The JWT has been validated, so we'll transform the standard JWT fields to a map
+          ;; representing an account entity in our system
+          {:db/id         (:sub auth-data)
+           ;; Keywords become strings when signed, so make it a keyword again.
+           :account/role  (keyword (:role auth-data))}))
+
+      protocols/IAuthorization
+      (-handle-unauthorized [_ request metadata]
+        (protocols/-handle-unauthorized default-backend request metadata)))))
+
+(defn oauth2-backend-jws
+  "Authentication/authorization backend that uses signed self contained tokens (signed JWT)
+  to authenticate.
+
+  Will accept a valid JWT token in a cookie, or the Authorization header. Returns a map
+  representing an account entity in the Starcity system with selected keys;
+  #{:db/id :account/email :account/role}
+
+  See more about signed JWT on https://funcool.github.io/buddy-auth/latest/#signed-jwt"
+  [& {:keys [unauthorized-handler oauth2-service] :as opts
+      :or   {unauthorized-handler default-unauthorized} }]
+  (let [default-backend (backends/jws (merge opts
+                                             {:token-name           "Bearer"
+                                              :unauthorized-handler unauthorized-handler}))]
+    (reify
+
+      protocols/IAuthentication
+      (-parse [_ request]
+        (letfn []
+          (or (get-in request [:oauth2/access-tokens oauth2-service :token])
               (protocols/-parse default-backend request))))
       (-authenticate [_ request data]
         (when-some [auth-data (protocols/-authenticate default-backend request data)]

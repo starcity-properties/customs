@@ -7,7 +7,8 @@
                  [buddy "1.3.0"]
                  [starcity/toolbelt-datomic "0.1.0"]
 
-                 [clj-time "0.14.4"]]
+                 [clj-time "0.14.4"]
+                 [ring/ring-core "1.6.3"]]
 
   :repositories {"releases" {:url        "s3://starjars/releases"
                              :username   :env/aws_access_key

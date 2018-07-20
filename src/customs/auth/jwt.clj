@@ -2,7 +2,10 @@
   (:require [buddy.sign.jwt :as jwt]
             [clj-time.coerce :as c]
             [clj-time.core :as t]
-            [clojure.spec.alpha :as s]))
+            [clojure.spec.alpha :as s]
+            [buddy.auth.protocols :as protocols]
+            [buddy.auth.backends :as backends]
+            [customs.access :as access]))
 
 (defn- claims
   "Returns a map with our JWT claims, given the eid and role of the account:
@@ -24,7 +27,7 @@
                          (/ 1000)
                          long)
         issued-at   (-date->secs (t/now))
-        expires-at  (-date->secs (t/plus (t/now) (t/seconds (or max-age 60))))]
+        expires-at  (-date->secs (t/plus (t/now) (t/seconds (or max-age 3600))))]
     {:iss  iss
      :aud  aud
      :iat  issued-at
@@ -53,6 +56,7 @@
 ;; sign =========================================================================
 ;; ==============================================================================
 
+
 (defn sign
   "Produce a signed JWT given an account, secret and options.
 
@@ -60,12 +64,13 @@
   :iss      - URI of the issuer. Required.
   :aud      - Collection of URIs of the recipients of the token. Required.
   :max-age  - Interval in seconds the token is valid from when it's issued.
-              Optional (default 60 secs)."
-  [account secret opts]
+              Optional (default 3600 secs)."
+  [account secret options]
   (jwt/sign (claims (:db/id account)
                     (:account/role account)
-                    opts)
+                    options)
             secret))
+
 
 (defn unsign
   "Produce a signed JWT given an account, secret and options.
@@ -74,7 +79,47 @@
   :iss      - URI of the issuer. Required.
   :aud      - Collection of URIs of the recipients of the token. Required.
   :max-age  - Interval in seconds the token is valid from when it's issued.
-              Optional (default 60 secs)."
-  [data secret opts]
-  (-> (jwt/unsign data secret opts)
+              Optional (default 3600 secs)."
+  [data secret options]
+  (-> (jwt/unsign data secret options)
       (update :role keyword)))
+
+
+;; ==============================================================================
+;; Backends =====================================================================
+;; ==============================================================================
+
+
+(defn oauth2-backend
+  "Authentication/authorization backend that uses signed self contained tokens (signed JWT)
+  to authenticate.
+
+  Will accept a valid JWT token in a cookie, or the Authorization header. Returns a map
+  representing an account entity in the Starcity system with selected keys;
+  #{:db/id :account/email :account/role}
+
+  See more about signed JWT on https://funcool.github.io/buddy-auth/latest/#signed-jwt"
+  [{:keys [unauthorized-handler] :as opts
+    :or   {unauthorized-handler access/default-unauthorized}}]
+  (let [default-backend (backends/jws (merge opts
+                                             {:token-name           "Bearer"
+                                              :unauthorized-handler unauthorized-handler}))]
+    (reify
+
+      protocols/IAuthentication
+      (-parse [_ request]
+        (letfn [(-parse-oauth2 [{:oauth2/keys [access-tokens]}]
+                  (get access-tokens :token))]
+          (or (-parse-oauth2 request)
+              (protocols/-parse default-backend request))))
+      (-authenticate [_ request data]
+        (when-some [auth-data (protocols/-authenticate default-backend request data)]
+          ;; The JWT has been validated, so we'll transform the standard JWT fields to a map
+          ;; representing an account entity in our system
+          {:db/id        (:sub auth-data)
+           ;; Keywords become strings when signed, so make it a keyword again.
+           :account/role (keyword (:role auth-data))}))
+
+      protocols/IAuthorization
+      (-handle-unauthorized [_ request metadata]
+        (protocols/-handle-unauthorized default-backend request metadata)))))

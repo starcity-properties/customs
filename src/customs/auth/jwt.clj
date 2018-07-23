@@ -22,16 +22,17 @@
   More about registered claims: https://tools.ietf.org/html/rfc7519#section-4
   The IANA JSON Web Token Registry: https://www.iana.org/assignments/jwt/jwt.xhtml"
 
-  [eid role {:keys [iss aud max-age]}]
+  [eid role {:keys [iss aud max-age iat exp nbf]}]
   (let [-date->secs #(-> (c/to-long %)
                          (/ 1000)
                          long)
-        issued-at   (-date->secs (t/now))
-        expires-at  (-date->secs (t/plus (t/now) (t/seconds (or max-age 3600))))]
+        issued-at   (or iat (-date->secs (t/now)))
+        not-before  (or nbf issued-at)
+        expires-at  (or exp (-date->secs (t/plus (t/now) (t/seconds (or max-age 3600)))))]
     {:iss  iss
      :aud  aud
      :iat  issued-at
-     :nbf  issued-at
+     :nbf  not-before
      :exp  expires-at
      :sub  eid
      :role role}))
@@ -63,6 +64,9 @@
   Options:
   :iss      - URI of the issuer. Required.
   :aud      - Collection of URIs of the recipients of the token. Required.
+  :iat      - Unix time in seconds at which the token was issued.
+  :nbf      - Unix time in seconds before which the JWT must NOT be accepted.
+  :exp      - Unix time in seconds after which the JWT must NOT be accepted.
   :max-age  - Interval in seconds the token is valid from when it's issued.
               Optional (default 3600 secs)."
   [account secret options]
@@ -76,10 +80,9 @@
   "Produce a signed JWT given an account, secret and options.
 
   Options:
-  :iss      - URI of the issuer. Required.
-  :aud      - Collection of URIs of the recipients of the token. Required.
-  :max-age  - Interval in seconds the token is valid from when it's issued.
-              Optional (default 3600 secs)."
+  :iss      - Validates that token's :iss matches the provided iss.
+  :aud      - Validates that token's :aud contains the provided aud
+  :max-age  - Validates that the token is not older than the provided :max-age."
   [data secret options]
   (-> (jwt/unsign data secret options)
       (update :role keyword)))

@@ -1,6 +1,8 @@
 (ns customs.middleware.oauth2
   (:require #_[clj-http.client :as http]
     [org.httpkit.client :as http]
+    [cemerick.url :as url]
+    [cheshire.core :as json]
     [clj-time.core :as time]
     [clojure.string :as str]
     [crypto.random :as random]
@@ -25,8 +27,7 @@
 
 (defn- absolute-uri [uri request]
   (-> (request/request-url request)
-      (java.net.URI/create)
-      (.resolve uri)
+      (url/url uri)
       str))
 
 
@@ -62,11 +63,12 @@
 
 
 (defn- format-access-token
-  [{{:keys [access_token expires_in refresh_token id_token]} :body :as r}]
-  (-> {:token access_token}
-      (cond-> expires_in (assoc :expires (-> expires_in time/seconds time/from-now))
-              refresh_token (assoc :refresh-token refresh_token)
-              id_token (assoc :id-token id_token))))
+  [{:keys [body] :as r}]
+  (let [{:keys [access_token expires_in refresh_token id_token] :as b} (json/parse-string body keyword)]
+    (-> {:token access_token}
+        (cond-> expires_in (assoc :expires (-> expires_in time/seconds time/from-now))
+                refresh_token (assoc :refresh-token refresh_token)
+                id_token (assoc :id-token id_token)))))
 
 
 (defn- get-access-token
@@ -74,12 +76,12 @@
     :or   {basic-auth? false} :as profile} request]
   (format-access-token
     @(http/post access-token-uri
-                (cond-> {:accept      :json, :as :json,
-                         :form-params {:grant_type    "authorization_code"
-                                       :code          (get-in request [:query-params "code"])
-                                       :redirect_uri  (absolute-uri profile request)
-                                       :client_id     client-id
-                                       :client_secret client-secret}}))))
+                {:accept      :json
+                 :form-params {:grant_type    "authorization_code"
+                               :code          (get-in request [:query-params "code"])
+                               :redirect_uri  (absolute-uri profile request)
+                               :client_id     client-id
+                               :client_secret client-secret}})))
 
 
 (defn- assoc-access-tokens [request]
@@ -99,17 +101,18 @@
   can verify the request is not a CSRF attack.
 
   If state matches, exchange the temporary code for an access token with a request to the :access-token-uri."
-  [{:keys [landing-uri] :as profile} state-matches? access-token-fn]
+  [{:keys [landing-uri query-params] :as profile} state-matches? access-token-fn]
   (fn [{:keys [session] :as request}]
     (let [state-mismatch-handler (fn [_] {:status 400, :headers {}, :body "State mismatch"})
-          error-handler (:state-mismatch-handler profile state-mismatch-handler)
-          landing-uri (get-in request [:query-params "landing_uri"] landing-uri)]
+          error-handler          (:state-mismatch-handler profile state-mismatch-handler)
+          landing-uri            (or landing-uri (get-in request [:query-params "landing_uri"]))]
       (if state-matches?
         (-> (resp/redirect landing-uri)
             (assoc :session (-> session
                                 (assoc ::access-tokens (access-token-fn))
                                 (dissoc ::state))))
         (error-handler request)))))
+
 
 (defn- code-grant-redirect-handler
   "Handle redirects according to the authorization code grant, where the auth service returns a code that
@@ -126,6 +129,7 @@
       ((redirect-handler profile
                          (-state-matches? request)
                          #(get-access-token profile request)) request))))
+
 
 (defn- implicit-grant-redirect-handler
   "Handle redirects according to the implicit grant. The client performs a POST request, including a :state

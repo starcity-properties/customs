@@ -4,9 +4,11 @@
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [com.datomic/datomic-free "0.9.5544"]
-                 [buddy "1.3.0"]
+                 [buddy "2.0.0"]
                  [starcity/toolbelt-datomic "0.1.0"]
+                 [com.cemerick/url "0.1.1"]
 
+                 [cheshire "5.8.0"]
                  [clj-time "0.14.4"]
                  [ring/ring-core "1.6.3"]]
 

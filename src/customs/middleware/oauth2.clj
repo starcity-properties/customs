@@ -1,5 +1,5 @@
 (ns customs.middleware.oauth2
-  (:require #_[clj-http.client :as http]
+  (:require
     [org.httpkit.client :as http]
     [cemerick.url :as url]
     [cheshire.core :as json]
@@ -31,15 +31,17 @@
       str))
 
 
-(defn- make-authorize-uri [{:keys [authorize-uri response-type redirect-uri]
-                            :or   {response-type "token"}
-                            :as   profile} request state]
+(defn- make-authorize-uri
+  [{:keys [authorize-uri response-type redirect-uri]
+    :or   {response-type "token"}
+    :as   profile} {:keys [query-params] :as req} state]
   (str authorize-uri
        (if (.contains ^String authorize-uri "?") "&" "?")
-       (codec/form-encode {:response_type response-type
-                           :client_id     (:client-id profile)
-                           :redirect_uri  (absolute-uri redirect-uri request)
-                           :state         state})))
+       (codec/form-encode (merge query-params
+                                 {:response_type response-type
+                                  :client_id     (:client-id profile)
+                                  :redirect_uri  (absolute-uri redirect-uri req)
+                                  :state         state}))))
 
 
 ;; ==============================================================================
@@ -79,7 +81,7 @@
                 {:accept      :json
                  :form-params {:grant_type    "authorization_code"
                                :code          (get-in request [:query-params "code"])
-                               :redirect_uri  (absolute-uri profile request)
+                               :redirect_uri  (absolute-uri (:redirect-uri profile) request)
                                :client_id     client-id
                                :client_secret client-secret}})))
 
@@ -101,7 +103,7 @@
   can verify the request is not a CSRF attack.
 
   If state matches, exchange the temporary code for an access token with a request to the :access-token-uri."
-  [{:keys [landing-uri query-params] :as profile} state-matches? access-token-fn]
+  [{:keys [landing-uri] :as profile} state-matches? access-token-fn]
   (fn [{:keys [session] :as request}]
     (let [state-mismatch-handler (fn [_] {:status 400, :headers {}, :body "State mismatch"})
           error-handler          (:state-mismatch-handler profile state-mismatch-handler)

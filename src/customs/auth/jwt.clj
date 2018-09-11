@@ -18,24 +18,26 @@
   :nbf (not before) - Unix time in seconds before which the JWT must NOT be accepted.
   :exp (expires at) - Unix time in seconds after which the JWT must NOT be accepted.
   :sub (subject)    - Identifier for the subject of the token (an account).
+  :privs            - Map of private claims to include in the token.
 
   More about registered claims: https://tools.ietf.org/html/rfc7519#section-4
   The IANA JSON Web Token Registry: https://www.iana.org/assignments/jwt/jwt.xhtml"
 
-  [eid role {:keys [iss aud max-age iat exp nbf]}]
+  [eid role {:keys [privs iss aud max-age iat exp nbf]}]
   (let [-date->secs #(-> (c/to-long %)
                          (/ 1000)
                          long)
         issued-at   (or iat (-date->secs (t/now)))
         not-before  (or nbf issued-at)
         expires-at  (or exp (-date->secs (t/plus (t/now) (t/seconds (or max-age 3600)))))]
-    {:iss  iss
-     :aud  aud
-     :iat  issued-at
-     :nbf  not-before
-     :exp  expires-at
-     :sub  eid
-     :role role}))
+    (merge privs
+           {:iss  iss
+            :aud  aud
+            :iat  issued-at
+            :nbf  not-before
+            :exp  expires-at
+            :sub  eid
+            :role role})))
 
 (s/def ::iss string?)
 (s/def ::aud (s/coll-of string?))
@@ -48,10 +50,10 @@
 
 (s/def ::jwt-claims (s/keys :req-un [::iss ::aud ::iat ::nbf ::exp ::sub ::role]))
 (s/fdef claims
-        :args (s/cat :eid (s/and pos? number?)
-                     :role ::role
-                     :opts (s/keys :req-un [::iss ::aud ::max-age]))
-        :ret ::jwt-claims)
+  :args (s/cat :eid (s/and pos? number?)
+               :role ::role
+               :opts (s/keys :req-un [::iss ::aud ::max-age]))
+  :ret ::jwt-claims)
 
 ;; ==============================================================================
 ;; sign =========================================================================
@@ -119,9 +121,10 @@
         (when-some [auth-data (protocols/-authenticate default-backend request data)]
           ;; The JWT has been validated, so we'll transform the standard JWT fields to a map
           ;; representing an account entity in our system
-          {:db/id        (:sub auth-data)
+          {:db/id         (:sub auth-data)
+           :account/email (:email auth-data)
            ;; Keywords become strings when signed, so make it a keyword again.
-           :account/role (keyword (:role auth-data))}))
+           :account/role  (keyword (:role auth-data))}))
 
       protocols/IAuthorization
       (-handle-unauthorized [_ request metadata]

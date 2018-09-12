@@ -52,7 +52,7 @@
 
 (defn- launch-handler [profile]
   (fn [{:keys [session] :or {session {}} :as request}]
-    (let [state (random-state)]
+    (let [state (or (::state session) (random-state))]
       (-> (response/redirect (make-authorize-uri profile request state))
           (assoc :session (assoc session ::state state))))))
 
@@ -110,7 +110,7 @@
         (-> (resp/redirect landing-uri)
             (assoc :session (-> session
                                 (assoc ::access-tokens (access-token-fn))
-                                (dissoc ::state))))
+                                (assoc ::state nil))))
         (error-handler request)))))
 
 

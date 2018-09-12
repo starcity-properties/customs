@@ -1,11 +1,12 @@
 (ns customs.auth.jwt
-  (:require [buddy.sign.jwt :as jwt]
-            [clj-time.coerce :as c]
-            [clj-time.core :as t]
-            [clojure.spec.alpha :as s]
-            [buddy.auth.protocols :as protocols]
-            [buddy.auth.backends :as backends]
-            [customs.access :as access]))
+  (:require
+    [buddy.auth.backends :as backends]
+    [buddy.auth.protocols :as protocols]
+    [buddy.sign.jwt :as jwt]
+    [clj-time.coerce :as c]
+    [clj-time.core :as t]
+    [clojure.spec.alpha :as s]
+    [customs.access :as access]))
 
 (defn- claims
   "Returns a map with our JWT claims, given the eid and role of the account:
@@ -48,10 +49,10 @@
 
 (s/def ::jwt-claims (s/keys :req-un [::iss ::aud ::iat ::nbf ::exp ::sub ::role]))
 (s/fdef claims
-        :args (s/cat :eid (s/and pos? number?)
-                     :role ::role
-                     :opts (s/keys :req-un [::iss ::aud ::max-age]))
-        :ret ::jwt-claims)
+  :args (s/cat :eid (s/and pos? number?)
+               :role ::role
+               :opts (s/keys :req-un [::iss ::aud ::max-age]))
+  :ret ::jwt-claims)
 
 ;; ==============================================================================
 ;; sign =========================================================================

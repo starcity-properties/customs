@@ -33,13 +33,14 @@
 
 (defn- make-authorize-uri [{:keys [authorize-uri response-type redirect-uri]
                             :or   {response-type "token"}
-                            :as   profile} request state]
+                            :as   profile} {:keys [query-params] :as req} state]
   (str authorize-uri
        (if (.contains ^String authorize-uri "?") "&" "?")
-       (codec/form-encode {:response_type response-type
-                           :client_id     (:client-id profile)
-                           :redirect_uri  (absolute-uri redirect-uri request)
-                           :state         state})))
+       (codec/form-encode (merge query-params
+                                 {:response_type response-type
+                                  :client_id     (:client-id profile)
+                                  :redirect_uri  (absolute-uri redirect-uri req)
+                                  :state         state}))))
 
 
 ;; ==============================================================================
@@ -72,14 +73,14 @@
 
 
 (defn- get-access-token
-  [{:keys [access-token-uri client-id client-secret basic-auth?]
+  [{:keys [access-token-uri redirect-uri client-id client-secret basic-auth?]
     :or   {basic-auth? false} :as profile} request]
   (format-access-token
     @(http/post access-token-uri
                 {:accept      :json
                  :form-params {:grant_type    "authorization_code"
                                :code          (get-in request [:query-params "code"])
-                               :redirect_uri  (absolute-uri profile request)
+                               :redirect_uri  (absolute-uri redirect-uri request)
                                :client_id     client-id
                                :client_secret client-secret}})))
 

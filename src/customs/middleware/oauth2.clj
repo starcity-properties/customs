@@ -37,10 +37,10 @@
   (str authorize-uri
        (if (.contains ^String authorize-uri "?") "&" "?")
        (codec/form-encode (merge query-params
-                                 {:response_type response-type
-                                  :client_id     (:client-id profile)
+                                 {:response_type (str response-type)
+                                  :client_id     (str (:client-id profile))
                                   :redirect_uri  (absolute-uri redirect-uri req)
-                                  :state         state}))))
+                                  :state         (str state)}))))
 
 
 ;; ==============================================================================

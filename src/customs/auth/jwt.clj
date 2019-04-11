@@ -70,10 +70,12 @@
   :max-age  - Interval in seconds the token is valid from when it's issued.
               Optional (default 3600 secs)."
   [account secret options]
-  (jwt/sign (claims (:db/id account)
-                    (:account/role account)
-                    options)
-            secret))
+  (jwt/sign
+    (claims (:db/id account)
+      (or (:role options)
+        (:account/role account))
+      options)
+    secret))
 
 
 (defn unsign

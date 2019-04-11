@@ -60,7 +60,7 @@
 
 (defn sign
   "Produce a signed JWT given an account, secret and options.
-  1 arity: sign the supplied `claims` with the `secret`.
+  2 arity: sign the supplied `use-claims` with the `secret`.
 
   Options:
   :iss      - URI of the issuer. Required.
@@ -73,11 +73,7 @@
   ([use-claims secret]
    (jwt/sign use-claims secret))
   ([account secret options]
-   (jwt/sign
-     (claims (:db/id account)
-       (:account/role account)
-       options)
-     secret)))
+   (jwt/sign (claims (:db/id account) (:account/role account) options) secret)))
 
 
 (defn unsign

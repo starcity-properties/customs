@@ -7,7 +7,7 @@
             [buddy.auth.backends :as backends]
             [customs.access :as access]))
 
-(defn- claims
+(defn claims
   "Returns a map with our JWT claims, given the eid and role of the account:
 
   Registered claims:
@@ -60,6 +60,7 @@
 
 (defn sign
   "Produce a signed JWT given an account, secret and options.
+  2 arity: sign the supplied `use-claims` with the `secret`.
 
   Options:
   :iss      - URI of the issuer. Required.
@@ -69,11 +70,10 @@
   :exp      - Unix time in seconds after which the JWT must NOT be accepted.
   :max-age  - Interval in seconds the token is valid from when it's issued.
               Optional (default 3600 secs)."
-  [account secret options]
-  (jwt/sign (claims (:db/id account)
-                    (:account/role account)
-                    options)
-            secret))
+  ([use-claims secret]
+   (jwt/sign use-claims secret))
+  ([account secret options]
+   (jwt/sign (claims (:db/id account) (:account/role account) options) secret)))
 
 
 (defn unsign

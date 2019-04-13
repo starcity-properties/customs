@@ -35,12 +35,13 @@
                             :or   {response-type "token"}
                             :as   profile} {:keys [query-params] :as req} state]
   (str authorize-uri
-       (if (.contains ^String authorize-uri "?") "&" "?")
-       (codec/form-encode (merge query-params
-                                 {:response_type (str response-type)
-                                  :client_id     (str (:client-id profile))
-                                  :redirect_uri  (absolute-uri redirect-uri req)
-                                  :state         (str state)}))))
+    (if (.contains ^String authorize-uri "?") "&" "?")
+    (codec/form-encode
+      (merge query-params
+        {:response_type (str response-type)
+         :client_id     (str (:client-id profile))
+         :redirect_uri  (absolute-uri redirect-uri (dissoc req :query-string))
+         :state         (str state)}))))
 
 
 ;; ==============================================================================
@@ -97,21 +98,21 @@
 
 
 (defn- redirect-handler
-  "Handle redirects according to the authorization code grant, where the auth service returns a code that
-  we can exchange for an access token. The client (browser) should include a state parameter in the query so we
+  "Handle redirects. The client (browser) should include a state parameter in the query so we
   can verify the request is not a CSRF attack.
 
   If state matches, exchange the temporary code for an access token with a request to the :access-token-uri."
-  [{:keys [landing-uri query-params] :as profile} state-matches? access-token-fn]
+  [{:keys [landing-uri landing-uri-key] :as profile} state-matches? access-token-fn]
   (fn [{:keys [session] :as request}]
-    (let [state-mismatch-handler (fn [_] {:status 400, :headers {}, :body "State mismatch"})
+    (let [state-mismatch-handler (fn [_]
+                                   {:status 400, :headers {}, :body "State mismatch"})
           error-handler          (:state-mismatch-handler profile state-mismatch-handler)
-          landing-uri            (or landing-uri (get-in request [:query-params "landing_uri"]))]
+          landing-uri            (or landing-uri (get-in request [:params landing-uri-key]))]
       (if state-matches?
         (-> (resp/redirect landing-uri)
-            (assoc :session (-> session
-                                (assoc ::access-tokens (access-token-fn))
-                                (assoc ::state nil))))
+          (assoc :session (-> session
+                            (assoc ::access-tokens (access-token-fn))
+                            (assoc ::state nil))))
         (error-handler request)))))
 
 

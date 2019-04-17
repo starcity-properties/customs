@@ -109,7 +109,7 @@
           error-handler          (:state-mismatch-handler profile state-mismatch-handler)
           landing-uri            (or landing-uri (get-in request [:params landing-uri-key]))]
       (if state-matches?
-        (-> (resp/redirect landing-uri)
+        (-> (resp/redirect (or landing-uri "/"))
           (assoc :session (-> session
                             (assoc ::access-tokens (access-token-fn))
                             (assoc ::state nil))))

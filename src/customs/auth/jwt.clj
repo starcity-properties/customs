@@ -1,11 +1,16 @@
 (ns customs.auth.jwt
-  (:require [buddy.sign.jwt :as jwt]
-            [clj-time.coerce :as c]
-            [clj-time.core :as t]
-            [clojure.spec.alpha :as s]
-            [buddy.auth.protocols :as protocols]
-            [buddy.auth.backends :as backends]
-            [customs.access :as access]))
+  (:require
+   [buddy.auth.protocols :as protocols]
+   [buddy.auth.backends :as backends]
+   [buddy.core.keys :as buddy.keys]
+   [buddy.sign.jwt :as jwt]
+   [buddy.sign.jws :as jws]
+   [clj-http.client :as client]
+   [clj-time.coerce :as c]
+   [clj-time.core :as t]
+   [clojure.spec.alpha :as s]
+   [customs.access :as access]
+   [customs.auth.auth0 :as auth0]))
 
 (defn claims
   "Returns a map with our JWT claims, given the eid and role of the account:
@@ -24,8 +29,8 @@
 
   [eid role {:keys [iss aud max-age iat exp nbf]}]
   (let [-date->secs #(-> (c/to-long %)
-                         (/ 1000)
-                         long)
+                       (/ 1000)
+                       long)
         issued-at   (or iat (-date->secs (t/now)))
         not-before  (or nbf issued-at)
         expires-at  (or exp (-date->secs (t/plus (t/now) (t/seconds (or max-age 3600)))))]
@@ -48,10 +53,10 @@
 
 (s/def ::jwt-claims (s/keys :req-un [::iss ::aud ::iat ::nbf ::exp ::sub ::role]))
 (s/fdef claims
-        :args (s/cat :eid (s/and pos? number?)
-                     :role ::role
-                     :opts (s/keys :req-un [::iss ::aud ::max-age]))
-        :ret ::jwt-claims)
+  :args (s/cat :eid (s/and pos? number?)
+          :role ::role
+          :opts (s/keys :req-un [::iss ::aud ::max-age]))
+  :ret ::jwt-claims)
 
 ;; ==============================================================================
 ;; sign =========================================================================
@@ -85,7 +90,7 @@
   :max-age  - Validates that the token is not older than the provided :max-age."
   [data secret options]
   (-> (jwt/unsign data secret options)
-      (update :role keyword)))
+    (update :role keyword)))
 
 
 ;; ==============================================================================
@@ -105,8 +110,8 @@
   [{:keys [unauthorized-handler] :as opts
     :or   {unauthorized-handler access/default-unauthorized}}]
   (let [default-backend (backends/jws (merge opts
-                                             {:token-name           "Bearer"
-                                              :unauthorized-handler unauthorized-handler}))]
+                                        {:token-name           "Bearer"
+                                         :unauthorized-handler unauthorized-handler}))]
     (reify
 
       protocols/IAuthentication
@@ -114,7 +119,7 @@
         (letfn [(-parse-oauth2 [{:oauth2/keys [access-tokens]}]
                   (get access-tokens :token))]
           (or (-parse-oauth2 request)
-              (protocols/-parse default-backend request))))
+            (protocols/-parse default-backend request))))
       (-authenticate [_ request data]
         (when-some [auth-data (protocols/-authenticate default-backend request data)]
           ;; The JWT has been validated, so we'll transform the standard JWT fields to a map
@@ -122,6 +127,36 @@
           {:db/id        (:sub auth-data)
            ;; Keywords become strings when signed, so make it a keyword again.
            :account/role (keyword (:role auth-data))}))
+
+      protocols/IAuthorization
+      (-handle-unauthorized [_ request metadata]
+        (protocols/-handle-unauthorized default-backend request metadata)))))
+
+
+(defn auth0-oauth2-backend
+  [{:keys [jwks-uri unauthorized-handler] :as opts
+    :or   {unauthorized-handler access/default-unauthorized}}]
+  (let [default-opts    (merge opts
+                          {:token-name           "Bearer"
+                           :unauthorized-handler unauthorized-handler})
+        default-backend (backends/jws default-opts)]
+    (reify
+
+      protocols/IAuthentication
+      (-parse [_ request]
+        (protocols/-parse default-backend request))
+      (-authenticate [_ request data]
+        (try
+          (let [backend (auth0/backend jwks-uri data default-opts)]
+            (when-some [auth-data (protocols/-authenticate backend request data)]
+              ;; The JWT has been validated, so we'll transform the standard JWT fields to a map
+              ;; representing an account entity in our system
+              {:db/id        (auth0/sub->db-id (:sub auth-data))
+               ;; Keywords become strings when signed, so make it a keyword again.
+               :account/role (auth0/payload->role auth-data)}))
+          (catch Exception e
+            ;; Unable to authenticate via Auth0
+            nil)))
 
       protocols/IAuthorization
       (-handle-unauthorized [_ request metadata]

@@ -151,8 +151,7 @@
             (when-some [auth-data (protocols/-authenticate backend request data)]
               ;; The JWT has been validated, so we'll transform the standard JWT fields to a map
               ;; representing an account entity in our system
-              {:db/id        (auth0/sub->db-id (:sub auth-data))
-               ;; Keywords become strings when signed, so make it a keyword again.
+              {:db/id        (auth0/entity-id auth-data)
                :account/role (auth0/payload->role auth-data)}))
           (catch Exception e
             ;; Unable to authenticate via Auth0

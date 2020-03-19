@@ -23,11 +23,11 @@
       (-permission->role (-most-permissive (:permissions payload))))))
 
 
-(defn sub->db-id [sub]
-  (Long. (second (clojure.string/split sub #"\|" 2))))
+(defn entity-id [payload]
+  (Long. (second (clojure.string/split (:sub payload) #"\|" 2))))
 
 
-(defn- retrieve-jwks [jwks-uri]
+(defn retrieve-jwks [jwks-uri]
   (let [pkeys (try
                 ;; TODO (waiyaki): TTL cache pkeys by their :kid
                 (:keys (:body (client/get jwks-uri {:as :json})))
@@ -44,7 +44,7 @@
                 :message  "JWKS endpoint did not contain any keys."})))))
 
 
-(defn- find-rsa-signing-key [token keys]
+(defn rsa-signing-key [token keys]
   (let [kid         (:kid (jws/decode-header token))
         signing-key (some->> keys
                       (filter #(and
@@ -65,7 +65,7 @@
 
 
 (defn backend [jwks-uri token {:keys [options] :as opts}]
-  (let [pkey (find-rsa-signing-key token (retrieve-jwks jwks-uri))]
+  (let [pkey (rsa-signing-key token (retrieve-jwks jwks-uri))]
     (backends/jws (merge opts
                     {:secret pkey
                      :options (merge options {:alg :rs256})}))))

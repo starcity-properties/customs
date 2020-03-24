@@ -3,7 +3,8 @@
    [buddy.auth.backends :as backends]
    [buddy.core.keys :as buddy.keys]
    [buddy.sign.jws :as jws]
-   [clj-http.client :as client]))
+   [clj-http.client :as client]
+   [clojure.string :as str]))
 
 
 (def ^:private weighted-legacy-roles
@@ -17,9 +18,9 @@
   (letfn [(-most-permissive [permissions]
             (ffirst (sort-by val > (select-keys weighted-legacy-roles permissions))))
           (-permission->role [permission]
-            (keyword "account.role" (second (clojure.string/split permission #":" 2))))]
-    (if-some [scope (not-empty (:scope payload))]
-      (-permission->role scope)
+            (keyword "account.role" (second (str/split permission #":" 2))))]
+    (if-some [scopes (some-> (:scope payload) not-empty (str/split #" "))]
+      (-permission->role (-most-permissive scopes))
       (-permission->role (-most-permissive (:permissions payload))))))
 
 
@@ -69,27 +70,3 @@
     (backends/jws (merge opts
                     {:secret pkey
                      :options (merge options {:alg :rs256})}))))
-
-
-(comment
-  (require
-    '[buddy.auth.backends :as backends]
-    '[buddy.sign.jwt :as jwt]
-    '[customs.access :as access])
-
-  (def url "https://starcity-dev.auth0.com/.well-known/jwks.json")
-  (def auth0-keys (:body (client/get url {:as :json})))
-  (def pkey (buddy.keys/jwk->public-key (first (:keys auth0-keys))))
-
-  ;; get any JWT token from auth0 at the starcity-dev domain
-  (def t "")
-
-  (def auth-backend (backend url t {:token-name           "Bearer"
-                                    :unauthorized-handler access/default-unauthorized}))
-
-  ;; Flip :skip-validation to test with expired tokens
-  (jwt/unsign t pkey {:alg             :rs256
-                      :skip-validation false})
-
-  (def auth-data (buddy.auth.protocols/-authenticate auth-backend {} t))
-  )

@@ -5,7 +5,6 @@
    [buddy.core.keys :as buddy.keys]
    [buddy.sign.jwt :as jwt]
    [buddy.sign.jws :as jws]
-   [clj-http.client :as client]
    [clj-time.coerce :as c]
    [clj-time.core :as t]
    [clojure.spec.alpha :as s]
@@ -151,8 +150,10 @@
             (when-some [auth-data (protocols/-authenticate backend request data)]
               ;; The JWT has been validated, so we'll transform the standard JWT fields to a map
               ;; representing an account entity in our system
-              {:db/id        (auth0/entity-id auth-data)
-               :account/role (auth0/payload->role auth-data)}))
+              (if (= "client-credentials" (:gty auth-data))
+                (assoc auth-data :account/role (auth0/payload->role auth-data))
+                {:db/id        (auth0/entity-id auth-data)
+                 :account/role (auth0/payload->role auth-data)})))
           (catch Exception e
             ;; Unable to authenticate via Auth0
             nil)))
@@ -160,3 +161,28 @@
       protocols/IAuthorization
       (-handle-unauthorized [_ request metadata]
         (protocols/-handle-unauthorized default-backend request metadata)))))
+
+(comment
+  (require
+    '[buddy.auth.backends :as backends]
+    '[buddy.sign.jwt :as jwt]
+    '[customs.access :as access]
+    '[clj-http.client :as client])
+
+  (def url "https://starcity-dev.auth0.com/.well-known/jwks.json")
+  (def auth0-keys (:body (client/get url {:as :json})))
+  (def pkey (buddy.keys/jwk->public-key (first (:keys auth0-keys))))
+
+  ;; get any JWT token from auth0 at the starcity-dev domain
+  (def t "")
+
+
+  (def auth-backend (auth0-oauth2-backend {:jwks-uri url}))
+
+  ;; Flip :skip-validation to test with expired tokens
+  (jwt/unsign t pkey {:alg             :rs256
+                      :skip-validation false})
+
+  (def auth-data (buddy.auth.protocols/-authenticate auth-backend {} t))
+  (prn auth-data)
+  )

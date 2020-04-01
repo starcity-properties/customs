@@ -25,7 +25,7 @@
 
 
 (defn entity-id [payload]
-  (Long. (second (clojure.string/split (:sub payload) #"\|" 2))))
+  (java.util.UUID/fromString (second (clojure.string/split (:sub payload) #"\|" 2))))
 
 
 (defn retrieve-jwks [jwks-uri]

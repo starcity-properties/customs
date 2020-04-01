@@ -152,7 +152,7 @@
               ;; representing an account entity in our system
               (if (= "client-credentials" (:gty auth-data))
                 (assoc auth-data :account/role (auth0/payload->role auth-data))
-                {:db/id        (auth0/entity-id auth-data)
+                {:account/id   (auth0/entity-id auth-data)
                  :account/role (auth0/payload->role auth-data)})))
           (catch Exception e
             ;; Unable to authenticate via Auth0

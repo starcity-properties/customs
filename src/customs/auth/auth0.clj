@@ -45,8 +45,8 @@
                 :message  "JWKS endpoint did not contain any keys."})))))
 
 
-(defn rsa-signing-key [token keys]
-  (let [kid         (:kid (jws/decode-header token))
+(defn rsa-signing-key [header keys]
+  (let [kid         (:kid header)
         signing-key (some->> keys
                       (filter #(and
                                  (= "RSA" (:kty %))
@@ -66,7 +66,10 @@
 
 
 (defn backend [jwks-uri token {:keys [options] :as opts}]
-  (let [pkey (rsa-signing-key token (retrieve-jwks jwks-uri))]
+  (let [header (jws/decode-header token)]
+    (when (not= :rs256 (:alg header))
+      (throw (ex-info "Token not signed using RSA."
+               {:message "Token not signed using RSA."})))
     (backends/jws (merge opts
-                    {:secret pkey
+                    {:secret  (rsa-signing-key header (retrieve-jwks jwks-uri))
                      :options (merge options {:alg :rs256})}))))

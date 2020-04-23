@@ -1,4 +1,4 @@
-(defproject starcity/customs "1.3.0-SNAPSHOT"
+(defproject starcity/customs "1.3.0"
   :description "Starcity authentication and authorization utilities"
   :license {:name "Eclipse Public License"
             :url  "http://www.eclipse.org/legal/epl-v10.html"}

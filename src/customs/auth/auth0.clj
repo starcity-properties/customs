@@ -25,7 +25,8 @@
 
 
 (defn entity-id [payload]
-  (java.util.UUID/fromString (second (clojure.string/split (:sub payload) #"\|" 2))))
+  (let [bp-user-id (get payload :https://starcity.com/bp_user_id)]
+    (java.util.UUID/fromString bp-user-id)))
 
 
 (defn retrieve-jwks [jwks-uri]

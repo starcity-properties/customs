@@ -19,9 +19,10 @@
             (ffirst (sort-by val > (select-keys weighted-legacy-roles permissions))))
           (-permission->role [permission]
             (keyword "account.role" (second (str/split permission #":" 2))))]
-    (if-some [scopes (some-> (:scope payload) not-empty (str/split #" "))]
-      (-permission->role (-most-permissive scopes))
-      (-permission->role (-most-permissive (:permissions payload))))))
+    (let [scopes (some-> (:scope payload) not-empty (str/split #" "))]
+      (if-some [legacy-scopes (seq (filter #(str/starts-with? % "legacy:") scopes))]
+        (-permission->role (-most-permissive legacy-scopes))
+        (-permission->role (-most-permissive (:permissions payload)))))))
 
 
 (defn entity-id [payload]

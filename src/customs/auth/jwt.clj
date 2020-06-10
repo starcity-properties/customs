@@ -97,6 +97,13 @@
 ;; ==============================================================================
 
 
+(defn- parse [request backend]
+  (letfn [(-parse-oauth2 [{:oauth2/keys [access-tokens]}]
+            (get access-tokens :token))]
+    (or (-parse-oauth2 request)
+      (protocols/-parse backend request))))
+
+
 (defn oauth2-backend
   "Authentication/authorization backend that uses signed self contained tokens (signed JWT)
   to authenticate.
@@ -115,10 +122,7 @@
 
       protocols/IAuthentication
       (-parse [_ request]
-        (letfn [(-parse-oauth2 [{:oauth2/keys [access-tokens]}]
-                  (get access-tokens :token))]
-          (or (-parse-oauth2 request)
-            (protocols/-parse default-backend request))))
+        (parse request default-backend))
       (-authenticate [_ request data]
         (when-some [auth-data (protocols/-authenticate default-backend request data)]
           ;; The JWT has been validated, so we'll transform the standard JWT fields to a map
@@ -143,7 +147,7 @@
 
       protocols/IAuthentication
       (-parse [_ request]
-        (protocols/-parse default-backend request))
+        (parse request default-backend))
       (-authenticate [_ request data]
         (try
           (let [backend (auth0/backend jwks-uri data default-opts)]

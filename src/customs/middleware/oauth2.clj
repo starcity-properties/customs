@@ -68,9 +68,9 @@
   [{:keys [body] :as r}]
   (let [{:keys [access_token expires_in refresh_token id_token] :as b} (json/parse-string body keyword)]
     (-> {:token access_token}
-        (cond-> expires_in (assoc :expires (-> expires_in time/seconds time/from-now))
-                refresh_token (assoc :refresh-token refresh_token)
-                id_token (assoc :id-token id_token)))))
+      (cond-> expires_in (assoc :expires (-> expires_in time/seconds time/from-now str))
+              refresh_token (assoc :refresh-token refresh_token)
+              id_token      (assoc :id-token id_token)))))
 
 
 (defn- get-access-token

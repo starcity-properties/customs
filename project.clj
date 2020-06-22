@@ -14,7 +14,9 @@
                  [cheshire "5.8.0"]
                  [clj-http "3.10.0"]
                  [clj-time "0.14.4"]
-                 [ring/ring-core "1.6.3"]]
+                 [ring/ring-core "1.6.3"
+                  :exclusions [ring/ring-codec]]
+                 [ring/ring-codec "1.1.2"]]
 
   :repositories {"releases" {:url        "s3://starjars/releases"
                              :username   :env/aws_access_key
